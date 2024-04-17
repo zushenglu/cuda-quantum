@@ -176,9 +176,9 @@ bool QuakeBridgeVisitor::interceptRecordDecl(clang::RecordDecl *x) {
   }
   if (isInNamespace(x, "std")) {
     if (name.equals("vector")) {
-      auto *cts = cast<clang::ClassTemplateSpecializationDecl>(x);
+      auto *cts = dyn_cast<clang::ClassTemplateSpecializationDecl>(x);
       // Traverse template argument 0 to get the vector's element type.
-      if (!TraverseType(cts->getTemplateArgs()[0].getAsType()))
+      if (!cts || !TraverseType(cts->getTemplateArgs()[0].getAsType()))
         return false;
       return pushType(cc::StdvecType::get(ctx, popType()));
     }
@@ -189,6 +189,22 @@ bool QuakeBridgeVisitor::interceptRecordDecl(clang::RecordDecl *x) {
     }
     if (name.equals("_Bit_type"))
       return pushType(builder.getI64Type());
+    if (name.equals("complex")) {
+      auto *cts = dyn_cast<clang::ClassTemplateSpecializationDecl>(x);
+      // Traverse template argument 0 to get the complex's element type.
+      if (!cts || !TraverseType(cts->getTemplateArgs()[0].getAsType()))
+        return false;
+      auto memTy = popType();
+      return pushType(ComplexType::get(memTy));
+    }
+    if (name.equals("initializer_list")) {
+      auto *cts = dyn_cast<clang::ClassTemplateSpecializationDecl>(x);
+      // Traverse template argument 0, the initializer list's element type.
+      if (!cts || !TraverseType(cts->getTemplateArgs()[0].getAsType()))
+        return false;
+      auto memTy = popType();
+      return pushType(cc::ArrayType::get(memTy));
+    }
     if (name.equals("function")) {
       auto *cts = cast<clang::ClassTemplateSpecializationDecl>(x);
       // Traverse template argument 0 to get the function's signature.
