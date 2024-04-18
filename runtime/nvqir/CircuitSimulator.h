@@ -345,6 +345,10 @@ private:
   /// @brief Reference to the current circuit name.
   std::string currentCircuitName = "";
 
+  bool isInTracerMode() {
+    return executionContext && executionContext->name == "tracer";
+  }
+
 protected:
   /// @brief The current Execution Context (typically this is null,
   /// sampling, or spin_op observation.
@@ -445,6 +449,10 @@ protected:
   /// @brief Perform the actual mechanics of measuring a qubit,
   /// left as a task for concrete subtypes.
   virtual bool measureQubit(const std::size_t qubitIdx) = 0;
+
+  /// @brief Perform the actual mechanics of resetting a qubit,
+  /// left as a task for concrete subtypes.
+  virtual void doResetQubit(const std::size_t qubitIdx) = 0;
 
   /// @brief Return true if this CircuitSimulator can
   /// handle <psi | H | psi> instead of NVQIR applying measure
@@ -663,7 +671,7 @@ protected:
                    const std::vector<std::size_t> &controls,
                    const std::vector<std::size_t> &targets,
                    const std::vector<ScalarType> &params) {
-    if (executionContext && executionContext->name == "tracer") {
+    if (isInTracerMode()) {
       std::vector<cudaq::QuditInfo> controlsInfo, targetsInfo;
       for (auto &c : controls)
         controlsInfo.emplace_back(2, c);
@@ -775,6 +783,9 @@ public:
     // Get a new qubit index
     auto newIdx = tracker.getNextIndex();
 
+    if (isInTracerMode())
+      return newIdx;
+
     if (isInBatchMode()) {
       batchModeCurrentNumQubits++;
       // In batch mode, we might already have an allocated state that
@@ -812,6 +823,9 @@ public:
     for (std::size_t i = 0; i < count; i++)
       qubits.emplace_back(tracker.getNextIndex());
 
+    if (isInTracerMode())
+      return qubits;
+
     if (isInBatchMode()) {
       // Store the current number of qubits requested
       batchModeCurrentNumQubits += count;
@@ -844,6 +858,11 @@ public:
 
   /// @brief Deallocate the qubit with give index
   void deallocate(const std::size_t qubitIdx) override {
+    if (isInTracerMode()) {
+      tracker.returnIndex(qubitIdx);
+      return;
+    }
+
     if (executionContext) {
       cudaq::info("Deferring qubit {} deallocation", qubitIdx);
       deferredDeallocation.push_back(qubitIdx);
@@ -861,7 +880,7 @@ public:
 
     // Reset the state if we've deallocated all qubits.
     if (tracker.allDeallocated()) {
-      cudaq::info("Deallocated all qubits, reseting state vector.");
+      cudaq::info("Deallocated all qubits, resetting state vector.");
       // all qubits deallocated,
       deallocateState();
       while (!gateQueue.empty())
@@ -876,6 +895,12 @@ public:
     // Do nothing if there are no allocated qubits.
     if (nQubitsAllocated == 0)
       return;
+
+    if (isInTracerMode()) {
+      for (auto qubitIdx : qubits)
+        tracker.returnIndex(qubitIdx);
+      return;
+    }
 
     if (executionContext) {
       for (auto &qubitIdx : qubits) {
@@ -899,9 +924,13 @@ public:
 
   /// @brief Reset the current execution context.
   void resetExecutionContext() override {
-    // If null, do nothing
     if (!executionContext)
       return;
+
+    if (isInTracerMode()) {
+      executionContext = nullptr;
+      return;
+    }
 
     // Get the ExecutionContext name
     auto execContextName = executionContext->name;
@@ -984,7 +1013,7 @@ public:
         // Do not deallocate the state, but reset it to |0>
         setToZeroState();
       } else {
-        cudaq::info("Deallocated all qubits, reseting state vector.");
+        cudaq::info("Deallocated all qubits, resetting state vector.");
         // all qubits deallocated,
         deallocateState();
       }
@@ -1145,6 +1174,9 @@ public:
   /// context, just measure, collapse, and return the bit.
   bool mz(const std::size_t qubitIdx,
           const std::string &registerName) override {
+    if (isInTracerMode())
+      return false;
+
     // Flush the Gate Queue
     flushGateQueue();
 
@@ -1162,6 +1194,13 @@ public:
 
     // Return the result
     return measureResult;
+  }
+
+  /// @brief Reset the qubit to the |0> state
+  void resetQubit(const std::size_t qubitIdx) override {
+    if (isInTracerMode())
+      return;
+    doResetQubit(qubitIdx);
   }
 }; // namespace nvqir
 } // namespace nvqir

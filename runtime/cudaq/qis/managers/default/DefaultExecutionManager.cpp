@@ -10,18 +10,11 @@
 
 #include "common/Logger.h"
 #include "cudaq/qis/managers/BasicExecutionManager.h"
-#include "cudaq/qis/qudit.h"
 #include "cudaq/spin_op.h"
 #include "cudaq/utils/cudaq_utils.h"
-#include <complex>
+#include "nvqir/CircuitSimulator.h"
 #include <cstring>
 #include <functional>
-#include <map>
-#include <queue>
-#include <sstream>
-#include <stack>
-
-#include "nvqir/CircuitSimulator.h"
 
 namespace nvqir {
 CircuitSimulator *getCircuitSimulatorInternal();
@@ -37,60 +30,17 @@ private:
   nvqir::CircuitSimulator *simulator() {
     return nvqir::getCircuitSimulatorInternal();
   }
-  /// @brief To improve `qudit` allocation, we defer
-  /// single `qudit` allocation requests until the first
-  /// encountered `apply` call.
-  std::vector<cudaq::QuditInfo> requestedAllocations;
-
-  /// @brief Allocate all requested `qudits`.
-  void flushRequestedAllocations() {
-    if (requestedAllocations.empty())
-      return;
-
-    allocateQudits(requestedAllocations);
-    requestedAllocations.clear();
-  }
 
 protected:
-  void allocateQudit(const cudaq::QuditInfo &q) override {
-    requestedAllocations.emplace_back(2, q.id);
+  std::size_t allocateQudit(std::size_t quditLevels = 2) override {
+    return simulator()->allocateQubit();
   }
 
-  void allocateQudits(const std::vector<cudaq::QuditInfo> &qudits) override {
-    simulator()->allocateQubits(qudits.size());
-  }
-
-  void deallocateQudit(const cudaq::QuditInfo &q) override {
-
-    // Before trying to deallocate, make sure the qudit hasn't
-    // been requested but not allocated.
-    auto iter =
-        std::find(requestedAllocations.begin(), requestedAllocations.end(), q);
-    if (iter != requestedAllocations.end()) {
-      requestedAllocations.erase(iter);
-      return;
-    }
-
+  void returnQudit(const cudaq::QuditInfo &q) override {
     simulator()->deallocate(q.id);
   }
 
-  void deallocateQudits(const std::vector<cudaq::QuditInfo> &qudits) override {
-    std::vector<std::size_t> local;
-    for (auto &q : qudits) {
-      auto iter = std::find(requestedAllocations.begin(),
-                            requestedAllocations.end(), q);
-      if (iter != requestedAllocations.end()) {
-        requestedAllocations.erase(iter);
-      } else {
-        local.push_back(q.id);
-      }
-    }
-
-    simulator()->deallocateQubits(local);
-  }
-
   void handleExecutionContextChanged() override {
-    requestedAllocations.clear();
     simulator()->setExecutionContext(executionContext);
   }
 
@@ -99,8 +49,6 @@ protected:
   }
 
   void executeInstruction(const Instruction &instruction) override {
-    flushRequestedAllocations();
-
     // Get the data, create the Qubit* targets
     auto [gateName, parameters, controls, targets, op] = instruction;
 
@@ -152,18 +100,15 @@ protected:
 
   int measureQudit(const cudaq::QuditInfo &q,
                    const std::string &registerName) override {
-    flushRequestedAllocations();
     return simulator()->mz(q.id, registerName);
   }
 
   void flushGateQueue() override {
     synchronize();
-    flushRequestedAllocations();
     simulator()->flushGateQueue();
   }
 
   void measureSpinOp(const cudaq::spin_op &op) override {
-    flushRequestedAllocations();
     simulator()->flushGateQueue();
 
     if (executionContext->canHandleObserve) {
@@ -227,7 +172,6 @@ public:
   virtual ~DefaultExecutionManager() = default;
 
   void resetQudit(const cudaq::QuditInfo &q) override {
-    flushRequestedAllocations();
     simulator()->resetQubit(q.id);
   }
 };
