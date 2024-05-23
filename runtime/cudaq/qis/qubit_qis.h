@@ -582,7 +582,7 @@ std::vector<T> slice_vector(std::vector<T> &original, std::size_t start,
   struct CONCAT(NAME, _operation) : public ::cudaq::unitary_operation {        \
     std::vector<std::complex<double>>                                          \
     unitary(const std::vector<double> &parameters) const override {            \
-      std::complex<double> i(0, 1.);                                           \
+      [[maybe_unused]] std::complex<double> i(0, 1.);                          \
       return __VA_ARGS__;                                                      \
     }                                                                          \
   };                                                                           \
