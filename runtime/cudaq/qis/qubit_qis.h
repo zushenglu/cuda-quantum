@@ -577,11 +577,12 @@ std::vector<T> slice_vector(std::vector<T> &original, std::size_t start,
 
 #define __qop__ __attribute__((annotate("user_custom_quantum_operation")))
 
-#define CUDAQ_EXTEND_OPERATIONS(NAME, NUMT, NUMP, ...)                         \
+#define CUDAQ_REGISTER_OPERATION(NAME, NUMT, NUMP, ...)                        \
   namespace cudaq {                                                            \
   struct CONCAT(NAME, _operation) : public ::cudaq::unitary_operation {        \
     std::vector<std::complex<double>>                                          \
     unitary(const std::vector<double> &parameters) const override {            \
+      std::complex<double> i(0, 1.);                                           \
       return __VA_ARGS__;                                                      \
     }                                                                          \
   };                                                                           \
@@ -599,7 +600,7 @@ std::vector<T> slice_vector(std::vector<T> &original, std::size_t start,
     std::vector<double> input(params, params + numParams);                     \
     cudaq::CONCAT(NAME, _operation) op;                                        \
     auto tmpOutput = op.unitary(input);                                        \
-    for (int i = 0; i < tmpOutput.size(); i++)                                 \
+    for (std::size_t i = 0; i < tmpOutput.size(); i++)                         \
       output[i] = tmpOutput[i];                                                \
     return;                                                                    \
   }
