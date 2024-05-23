@@ -903,6 +903,7 @@ def R1Op : OneTargetParamOp<"r1", [Rotation]> {
      └───────┘
     ```
   }];
+  let hasCanonicalizer = 1;
 }
 
 def RxOp : OneTargetParamOp<"rx", [Rotation]> {
