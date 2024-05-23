@@ -22,7 +22,7 @@ concept ValidQArraySize = N > 0;
 #endif
 
 /// @brief Provide a base type so we can
-/// know we are handling qarray types without
+/// know we are handling `qarray` types without
 /// need for the template parameter.
 class qarray_base {};
 

@@ -157,6 +157,8 @@ public:
   /// Flush the gate queue (needed for accurate timing information)
   virtual void flushGateQueue(){};
 
+  /// @brief Register a new custom unitary operation under the
+  /// provided operation name.
   template <typename T>
   void registerOperation(const std::string &name) {
     auto iter = registeredOperations.find(name);
